@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <rect width="512" height="512" rx="112" fill="#FFF8F0"/>
+  <rect x="24" y="24" width="464" height="464" rx="96" fill="#FCE9ED"/>
+  <!-- Open Book Base -->
+  <path d="M116 320C116 296 156 286 256 306C356 286 396 296 396 320V394C396 394 344 374 256 394C168 374 116 394 116 394V320Z" fill="#C9DFC0" stroke="#2D2327" stroke-width="14" stroke-linejoin="round"/>
+  <path d="M256 306V394" stroke="#2D2327" stroke-width="12" stroke-linecap="round"/>
+  <!-- Speech Bubble -->
+  <path d="M258 110H372C396.3 110 416 129.7 416 154V222C416 246.3 396.3 266 372 266H316L278 296V266H258C233.7 266 214 246.3 214 222V154C214 129.7 233.7 110 258 110Z" fill="#F8E6A0" stroke="#2D2327" stroke-width="14" stroke-linejoin="round"/>
+  <!-- Language lines inside bubble -->
+  <path d="M266 170H364M266 206H332" stroke="#2D2327" stroke-width="14" stroke-linecap="round"/>
+  <!-- Magnifying Glass -->
+  <circle cx="192" cy="204" r="82" fill="#FFF8F0" fill-opacity="0.92" stroke="#2D2327" stroke-width="16"/>
+  <circle cx="192" cy="204" r="56" stroke="#F6C9D5" stroke-width="12"/>
+  <path d="M134 262L92 304" stroke="#2D2327" stroke-width="22" stroke-linecap="round"/>
+  <path d="M134 262L92 304" stroke="#F6C9D5" stroke-width="10" stroke-linecap="round"/>
+</svg>

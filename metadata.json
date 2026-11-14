@@ -1,0 +1,6 @@
+{
+  "name": "PINDAMAI",
+  "description": "Scan the world. Learn the language. AI language learning scanner for Arabic and English.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,31 @@
+{
+  "id": "/",
+  "name": "PINDAMAI",
+  "short_name": "PINDAMAI",
+  "description": "AI Language Learning Scanner",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "theme_color": "#F6C9D5",
+  "background_color": "#FFF8F0",
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
