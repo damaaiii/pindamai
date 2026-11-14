@@ -29,6 +29,64 @@ export function sendJson(res: ApiResponse, statusCode: number, payload: unknown)
   return res;
 }
 
+export function sendSuccess<T>(res: ApiResponse, data: T, statusCode = 200) {
+  return sendJson(res, statusCode, {
+    success: true,
+    data,
+  });
+}
+
+export function sendError(
+  res: ApiResponse,
+  statusCode: number,
+  code: string,
+  message: string,
+  details?: string,
+  extra?: Record<string, unknown>
+) {
+  return sendJson(res, statusCode, {
+    success: false,
+    error: {
+      code,
+      message,
+      ...(details ? { details } : {}),
+      ...(extra || {}),
+    },
+  });
+}
+
+function extractBackendErrorDetail(err: unknown, depth = 0): string | undefined {
+  if (err === null || err === undefined || depth > 4) return undefined;
+  if (typeof err === 'string') {
+    const t = err.trim();
+    return t && t !== '[object Object]' ? t : undefined;
+  }
+  if (err instanceof Error) {
+    const msg = err.message?.trim();
+    if (msg && msg !== '[object Object]') return msg;
+    const anyErr = err as Error & { cause?: unknown; details?: unknown };
+    return (
+      extractBackendErrorDetail(anyErr.cause, depth + 1) ||
+      extractBackendErrorDetail(anyErr.details, depth + 1)
+    );
+  }
+  if (typeof err === 'object') {
+    const obj = err as Record<string, unknown>;
+    for (const candidate of [
+      typeof obj.error === 'object' && obj.error !== null
+        ? (obj.error as Record<string, unknown>).message
+        : undefined,
+      obj.error,
+      obj.message,
+      obj.details,
+    ]) {
+      const found = extractBackendErrorDetail(candidate, depth + 1);
+      if (found) return found;
+    }
+  }
+  return undefined;
+}
+
 export async function readJsonBody<T = Record<string, unknown>>(req: ApiRequest): Promise<T> {
   const existing = req.body;
   if (existing !== undefined && existing !== null) {
@@ -170,22 +228,26 @@ Aturan gaya bahasa:
 
 export function handleAiError(res: ApiResponse, error: unknown, fallbackMsg: string) {
   const errObj = error as Error & { statusCode?: number; status?: number; needsConfig?: boolean };
-  const message = errObj?.message || '';
+  const message = extractBackendErrorDetail(error) || '';
 
   if (message === 'INVALID_JSON_BODY') {
-    return sendJson(res, 400, {
-      error: 'Format data permintaan ke server tidak valid (JSON bermasalah).',
-      code: 'INVALID_JSON_BODY',
-    });
+    return sendError(
+      res,
+      400,
+      'INVALID_JSON_BODY',
+      'Format data permintaan ke server tidak valid (JSON bermasalah).'
+    );
   }
 
   if (message === 'GEMINI_API_KEY_MISSING' || errObj?.needsConfig) {
-    return sendJson(res, 503, {
-      error:
-        'Konfigurasi AI belum tersedia di server. Pastikan GEMINI_API_KEY sudah diatur di environment variables ya!',
-      code: 'GEMINI_API_KEY_MISSING',
-      needsConfig: true,
-    });
+    return sendError(
+      res,
+      503,
+      'GEMINI_API_KEY_MISSING',
+      'Konfigurasi AI belum tersedia. Hubungi administrator aplikasi.',
+      'GEMINI_API_KEY belum diatur di environment variables server.',
+      { needsConfig: true }
+    );
   }
 
   if (
@@ -193,21 +255,25 @@ export function handleAiError(res: ApiResponse, error: unknown, fallbackMsg: str
     message.includes('PERMISSION_DENIED') ||
     errObj?.status === 403
   ) {
-    return sendJson(res, 400, {
-      error:
-        'Ups, Gemini API Key sepertinya belum valid atau izinnya ditolak. Cek lagi konfigurasi API Key di server ya!',
-      code: 'API_KEY_ERROR',
-      needsConfig: true,
-    });
+    return sendError(
+      res,
+      400,
+      'API_KEY_ERROR',
+      'Ups, Gemini API Key sepertinya belum valid atau izinnya ditolak. Cek lagi konfigurasi API Key di server ya!',
+      message.slice(0, 240),
+      { needsConfig: true }
+    );
   }
 
   if (message.includes('RESOURCE_EXHAUSTED') || errObj?.status === 429) {
     console.warn('[PINDAMAI AI Rate Limit 429]', message.slice(0, 300));
-    return sendJson(res, 429, {
-      error:
-        'Wah, kuota request AI lagi padat nih! Tunggu beberapa saat ya lalu coba lagi.',
-      code: 'RATE_LIMIT',
-    });
+    return sendError(
+      res,
+      429,
+      'RATE_LIMIT',
+      'Wah, kuota request AI lagi padat nih! Tunggu beberapa saat ya lalu coba lagi.',
+      message.slice(0, 240)
+    );
   }
 
   console.error('[PINDAMAI AI Error]', error);
@@ -217,20 +283,31 @@ export function handleAiError(res: ApiResponse, error: unknown, fallbackMsg: str
       : errObj?.statusCode && errObj.statusCode >= 400 && errObj.statusCode < 500
         ? errObj.statusCode
         : 500;
-  return sendJson(res, status, {
-    error: `${fallbackMsg}. Silakan coba beberapa saat lagi.`,
-    code: 'AI_REQUEST_FAILED',
-  });
+  return sendError(
+    res,
+    status,
+    'AI_REQUEST_FAILED',
+    `${fallbackMsg}. Silakan coba beberapa saat lagi.`,
+    message ? message.slice(0, 240) : undefined
+  );
 }
 
 export async function handleHealth(_req: ApiRequest, res: ApiResponse) {
   const apiKey = getConfiguredApiKey();
-  return sendJson(res, 200, {
+  return sendSuccess(res, {
     ok: true,
     aiConfigured: Boolean(apiKey),
     model: MODEL_NAME,
   });
 }
+
+const SUPPORTED_VISION_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+]);
+const MAX_IMAGE_BINARY_BYTES = 3.8 * 1024 * 1024;
 
 // 1. Object Scanner (Gemini Vision)
 export async function handleScanObjects(req: ApiRequest, res: ApiResponse) {
@@ -243,14 +320,52 @@ export async function handleScanObjects(req: ApiRequest, res: ApiResponse) {
     }>(req);
     const { imageBase64, mimeType = 'image/jpeg', mode = 'single', hint } = body;
 
-    if (!imageBase64) {
-      return sendJson(res, 400, {
-        error: 'Gambarnya belum ada nih! Upload atau jepret dulu ya.',
-      });
+    if (!imageBase64 || typeof imageBase64 !== 'string') {
+      return sendError(
+        res,
+        400,
+        'IMAGE_REQUIRED',
+        'Gambarnya belum ada nih! Upload atau jepret dulu ya.'
+      );
+    }
+
+    const prefixMatch = /^data:([^;]+);base64,/i.exec(imageBase64);
+    const rawMime = (prefixMatch?.[1] || mimeType || 'image/jpeg').toLowerCase().trim();
+    const resolvedMime = rawMime === 'image/jpg' ? 'image/jpeg' : rawMime;
+
+    if (!SUPPORTED_VISION_MIME_TYPES.has(resolvedMime)) {
+      return sendError(
+        res,
+        400,
+        'UNSUPPORTED_IMAGE_FORMAT',
+        `Format gambar (${resolvedMime}) belum didukung. Gunakan foto JPG, PNG, WebP, atau GIF ya!`,
+        `Unsupported MIME type: ${resolvedMime}`
+      );
+    }
+
+    const cleanBase64 = imageBase64.replace(/^data:[^;]+;base64,/, '').replace(/\s+/g, '');
+    if (cleanBase64.length < 32 || !/^[A-Za-z0-9+/=]+$/.test(cleanBase64)) {
+      return sendError(
+        res,
+        400,
+        'INVALID_IMAGE_DATA',
+        'Data gambar tidak valid atau rusak. Coba pilih atau foto ulang gambarnya ya!'
+      );
+    }
+
+    const padding = cleanBase64.endsWith('==') ? 2 : cleanBase64.endsWith('=') ? 1 : 0;
+    const approxBytes = Math.floor((cleanBase64.length * 3) / 4) - padding;
+    if (approxBytes > MAX_IMAGE_BINARY_BYTES) {
+      return sendError(
+        res,
+        413,
+        'IMAGE_TOO_LARGE',
+        'Ukuran gambar terlalu besar untuk diproses AI. Coba pilih foto yang lebih kecil atau crop dulu ya!',
+        `Decoded image size ${approxBytes} bytes exceeds ${MAX_IMAGE_BINARY_BYTES} byte limit`
+      );
     }
 
     const ai = createGeminiClient();
-    const cleanBase64 = imageBase64.replace(/^data:[^;]+;base64,/, '');
 
     const prompt = `
 Analisis gambar ini untuk aplikasi belajar bahasa Arab & Inggris (PINDAMAI).
@@ -279,7 +394,7 @@ Aturan WAJIB:
         parts: [
           {
             inlineData: {
-              mimeType,
+              mimeType: resolvedMime,
               data: cleanBase64,
             },
           },
@@ -318,6 +433,7 @@ Aturan WAJIB:
                         english: { type: Type.STRING },
                         indonesian: { type: Type.STRING },
                       },
+                      required: ['arabic', 'transliteration', 'english', 'indonesian'],
                     },
                   },
                   exampleSentences: {
@@ -329,12 +445,27 @@ Aturan WAJIB:
                         arabic: { type: Type.STRING },
                         indonesian: { type: Type.STRING },
                       },
+                      required: ['english', 'arabic', 'indonesian'],
                     },
                   },
                 },
+                required: [
+                  'confidence',
+                  'indonesianName',
+                  'arabicWord',
+                  'arabicTransliteration',
+                  'englishWord',
+                  'ipaTranscription',
+                  'indonesianMeaning',
+                  'category',
+                  'funNote',
+                  'relatedVocabulary',
+                  'exampleSentences',
+                ],
               },
             },
           },
+          required: ['uncertain', 'confidenceNote', 'objects'],
         },
       },
     });
@@ -344,7 +475,7 @@ Aturan WAJIB:
       confidenceNote: 'AI belum bisa mengenali objek dengan jelas. Coba foto ulang dengan pencahayaan lebih terang ya!',
       objects: [],
     });
-    return sendJson(res, 200, parsed);
+    return sendSuccess(res, parsed);
   } catch (error) {
     return handleAiError(res, error, 'Gagal menganalisis objek dari gambar');
   }
@@ -434,9 +565,12 @@ export async function handleAnalyzeLanguage(req: ApiRequest, res: ApiResponse) {
 
     const rawText = (text || '').trim();
     if (!rawText) {
-      return sendJson(res, 400, {
-        error: 'Teksnya masih kosong nih! Ketik atau scan teks dulu ya.',
-      });
+      return sendError(
+        res,
+        400,
+        'TEXT_REQUIRED',
+        'Teksnya masih kosong nih! Ketik atau scan teks dulu ya.'
+      );
     }
 
     const ai = createGeminiClient();
@@ -1084,7 +1218,7 @@ ${chunkIdx === 0 && totalSourceSentences >= 2 ? '- Karena teks multi-kalimat, WA
       })),
     };
 
-    return sendJson(res, 200, responsePayload);
+    return sendSuccess(res, responsePayload);
   } catch (error) {
     return handleAiError(res, error, 'Gagal menganalisis teks');
   }
@@ -1124,9 +1258,12 @@ export async function handleGeneratePractice(req: ApiRequest, res: ApiResponse) 
     } = body;
 
     if (!sourceText && vocabularyList.length === 0) {
-      return sendJson(res, 400, {
-        error: 'Belum ada bahan latihan nih! Scan sesuatu dulu atau simpan minimal beberapa kosakata ya.',
-      });
+      return sendError(
+        res,
+        400,
+        'PRACTICE_SOURCE_REQUIRED',
+        'Belum ada bahan latihan nih! Scan sesuatu dulu atau simpan minimal beberapa kosakata ya.'
+      );
     }
 
     const ai = createGeminiClient();
@@ -1362,7 +1499,7 @@ PENTING: Bahasa Arab wajib berharakat lengkap dan akurat. Penjelasan menggunakan
     });
 
     const parsed = safeParseGeminiJson<Record<string, unknown>>(response.text, {});
-    return sendJson(res, 200, { ...parsed, mode });
+    return sendSuccess(res, { ...parsed, mode });
   } catch (error) {
     return handleAiError(res, error, 'Gagal membuat latihan interaktif');
   }
@@ -1379,7 +1516,7 @@ export async function handleTts(req: ApiRequest, res: ApiResponse) {
     const { text, lang = 'ar', slow = false } = body;
 
     if (!text || !text.trim()) {
-      return sendJson(res, 400, { error: 'Teks untuk dibacakan masih kosong.' });
+      return sendError(res, 400, 'TTS_TEXT_REQUIRED', 'Teks untuk dibacakan masih kosong.');
     }
 
     const apiKey = getConfiguredApiKey();
@@ -1473,12 +1610,15 @@ export async function handleTts(req: ApiRequest, res: ApiResponse) {
       ttsResponse.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
 
     if (!base64Audio) {
-      return sendJson(res, 502, {
-        error: 'Suara TTS belum berhasil dibuat oleh server AI. Coba lagi ya!',
-      });
+      return sendError(
+        res,
+        502,
+        'TTS_EMPTY_AUDIO',
+        'Suara TTS belum berhasil dibuat oleh server AI. Coba lagi ya!'
+      );
     }
 
-    return sendJson(res, 200, {
+    return sendSuccess(res, {
       audioBase64: base64Audio,
       mimeType: 'audio/wav',
     });

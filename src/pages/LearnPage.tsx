@@ -24,6 +24,7 @@ import type {
 } from '../types/pindamai';
 import { AudioPlayerButton } from '../components/AudioPlayerButton';
 import { apiRequest } from '../lib/apiClient';
+import { formatSafeError } from '../lib/errorFormatter';
 import learn3dImg from '../assets/images/learn_3d_study_1794619234598.jpg';
 
 interface LearnPageProps {
@@ -121,9 +122,10 @@ export const LearnPage: React.FC<LearnPageProps> = ({
       }
     } catch (err) {
       setError(
-        err instanceof Error
-          ? err.message
-          : 'Waduh, gagal menganalisis teks. Coba cek koneksi atau ulangi lagi ya!'
+        formatSafeError(
+          err,
+          'Waduh, gagal menganalisis teks. Coba cek koneksi atau ulangi lagi ya!'
+        )
       );
     } finally {
       setLoading(false);

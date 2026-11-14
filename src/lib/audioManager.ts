@@ -1,4 +1,5 @@
 import { apiRequest } from './apiClient';
+import { formatSafeError } from './errorFormatter';
 
 export type AudioLang = 'ar-SA' | 'en-US' | 'id-ID';
 export type AudioStatus = 'idle' | 'loading' | 'playing' | 'paused' | 'error';
@@ -301,10 +302,10 @@ class PindamaiAudioManager {
       this.emit({
         activeId: id,
         status: 'error',
-        errorMessage:
-          err instanceof Error
-            ? err.message
-            : 'Audio pengucapan gagal dimuat. Coba lagi sebentar ya!',
+        errorMessage: formatSafeError(
+          err,
+          'Audio pengucapan gagal dimuat. Coba lagi sebentar ya!'
+        ),
       });
     }
   }

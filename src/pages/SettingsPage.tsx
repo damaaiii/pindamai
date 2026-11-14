@@ -14,6 +14,7 @@ import type {
   LearningLanguage,
 } from '../types/pindamai';
 import { PWAInstallButton } from '../components/PWAInstallButton';
+import { formatSafeError } from '../lib/errorFormatter';
 import { clearAllData, exportAllData, importAllData } from '../lib/db';
 import { speakText } from '../lib/speech';
 
@@ -61,9 +62,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         `Berhasil! ${res.importedVocab} kosakata dan ${res.importedScans} riwayat scan dipulihkan.`
       );
     } catch (err) {
-      onNotify(
-        err instanceof Error ? err.message : 'File backup JSON tidak valid atau rusak nih.'
-      );
+      onNotify(formatSafeError(err, 'File backup JSON tidak valid atau rusak nih.'));
     } finally {
       e.target.value = '';
     }

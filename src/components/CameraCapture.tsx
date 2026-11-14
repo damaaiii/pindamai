@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Camera, RefreshCw, X, AlertCircle } from 'lucide-react';
+import { formatSafeError } from '../lib/errorFormatter';
 
 interface CameraCaptureProps {
   onCapture: (dataUrl: string) => void;
@@ -47,7 +48,7 @@ export const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onClose
           setIsReady(true);
         }
       } catch (err) {
-        const msg = err instanceof Error ? err.message : '';
+        const msg = formatSafeError(err, '');
         if (msg.toLowerCase().includes('permission') || msg.toLowerCase().includes('denied') || msg.toLowerCase().includes('notallowed')) {
           setError(
             'Izin kameranya belum dibuka nih. Kamu bisa izinkan kamera di pengaturan browser, atau langsung upload foto dari galeri aja ya!'

@@ -11,7 +11,7 @@ import {
   handleHealth,
   handleScanObjects,
   handleTts,
-  sendJson,
+  sendError,
 } from './server/handlers';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -26,10 +26,20 @@ async function startServer() {
   // Handle malformed JSON request bodies with JSON error rather than HTML
   app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
     if (err instanceof SyntaxError && 'body' in err) {
-      return sendJson(res, 400, {
-        error: 'Format JSON yang dikirim ke server tidak valid.',
-        code: 'INVALID_JSON_BODY',
-      });
+      return sendError(
+        res,
+        400,
+        'INVALID_JSON_BODY',
+        'Format JSON yang dikirim ke server tidak valid.'
+      );
+    }
+    if (err && typeof err === 'object' && 'type' in err && (err as { type?: string }).type === 'entity.too.large') {
+      return sendError(
+        res,
+        413,
+        'PAYLOAD_TOO_LARGE',
+        'Ukuran gambar terlalu besar untuk dikirim ke server. Coba pilih foto yang lebih kecil ya!'
+      );
     }
     return next(err);
   });
@@ -56,10 +66,12 @@ async function startServer() {
 
   // Never let unknown /api/* requests fall through to SPA HTML
   app.all('/api/*', (req: Request, res: Response) => {
-    return sendJson(res, 404, {
-      error: `Endpoint API (${req.path}) tidak ditemukan di server.`,
-      code: 'API_NOT_FOUND',
-    });
+    return sendError(
+      res,
+      404,
+      'API_NOT_FOUND',
+      `Endpoint API (${req.path}) tidak ditemukan di server.`
+    );
   });
 
   const httpServer = http.createServer(app);

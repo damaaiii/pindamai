@@ -23,6 +23,7 @@ import type {
 import { playFeedbackTone } from '../lib/speech';
 import { AudioPlayerButton } from '../components/AudioPlayerButton';
 import { apiRequest } from '../lib/apiClient';
+import { formatSafeError } from '../lib/errorFormatter';
 import practice3dImg from '../assets/images/practice_3d_quiz_1794619235141.jpg';
 import words3dImg from '../assets/images/words_3d_collection_1794619235506.jpg';
 
@@ -442,8 +443,7 @@ export const PracticePage: React.FC<PracticePageProps> = ({
       setSession(normalized);
       initStepState(normalized, 0);
     } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : 'Waduh, gagal bikin latihan. Coba lagi sebentar ya!';
+      const msg = formatSafeError(err, 'Waduh, gagal bikin latihan. Coba lagi sebentar ya!');
       setError(msg);
       onNotify(msg);
     } finally {

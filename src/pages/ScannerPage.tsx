@@ -30,8 +30,14 @@ import type {
 import { CameraCapture } from '../components/CameraCapture';
 import { ImageEditor } from '../components/ImageEditor';
 import { AudioPlayerButton } from '../components/AudioPlayerButton';
-import { fileToDataUrl } from '../lib/imageUtils';
+import {
+  estimateBase64Bytes,
+  extractDataUrlMimeType,
+  MAX_SCAN_PAYLOAD_BYTES,
+  prepareImageFileForScan,
+} from '../lib/imageUtils';
 import { apiRequest } from '../lib/apiClient';
+import { formatSafeError } from '../lib/errorFormatter';
 
 interface ScannerPageProps {
   initialMode: 'text' | 'object';
@@ -90,19 +96,18 @@ export const ScannerPage: React.FC<ScannerPageProps> = ({
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      onNotify('Oops, pilih file gambar ya (JPG, PNG, atau WebP).');
-      return;
-    }
     try {
-      const dataUrl = await fileToDataUrl(file);
-      setImageDataUrl(dataUrl);
+      const normalizedDataUrl = await prepareImageFileForScan(file, 1280);
+      setImageDataUrl(normalizedDataUrl);
       setShowCamera(false);
       setOcrError(null);
       setObjectError(null);
       setObjectResult(null);
-    } catch {
-      onNotify('Gagal membaca gambar dari perangkat.');
+    } catch (err) {
+      const msg = formatSafeError(err, 'Gagal membaca atau memproses file gambar.');
+      setObjectError(msg);
+      setOcrError(msg);
+      onNotify(msg);
     } finally {
       e.target.value = '';
     }
@@ -150,11 +155,11 @@ export const ScannerPage: React.FC<ScannerPageProps> = ({
         onNotify('Sip! Teks berhasil dibaca. Cek dulu ya lalu tekan Analyze Text!');
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : '';
+      const msg = formatSafeError(err, 'gagal memproses gambar');
       setOcrError(
         !isOnline
           ? 'OCR gagal memuat model bahasa karena perangkat lagi offline dan data bahasa belum tersimpan di cache browser.'
-          : `Wah, OCR mengalami kendala (${msg || 'gagal memproses gambar'}). Coba crop lebih jelas atau tempel teks secara manual.`
+          : `Wah, OCR mengalami kendala (${msg}). Coba crop lebih jelas atau tempel teks secara manual.`
       );
     } finally {
       setOcrRunning(false);
@@ -204,9 +209,7 @@ export const ScannerPage: React.FC<ScannerPageProps> = ({
       });
     } catch (err) {
       setTextAnalyzeError(
-        err instanceof Error
-          ? err.message
-          : 'Waduh, gagal menganalisis teks. Coba lagi sebentar ya!'
+        formatSafeError(err, 'Waduh, gagal menganalisis teks. Coba lagi sebentar ya!')
       );
     } finally {
       setTextAnalyzing(false);
@@ -225,6 +228,14 @@ export const ScannerPage: React.FC<ScannerPageProps> = ({
       return;
     }
 
+    const detectedMime = extractDataUrlMimeType(imageDataUrl);
+    if (estimateBase64Bytes(imageDataUrl) > MAX_SCAN_PAYLOAD_BYTES) {
+      setObjectError(
+        'Ukuran gambar terlalu besar untuk dikirim ke server. Coba crop atau pilih foto yang lebih kecil ya!'
+      );
+      return;
+    }
+
     setObjectLoading(true);
     setObjectError(null);
 
@@ -233,7 +244,7 @@ export const ScannerPage: React.FC<ScannerPageProps> = ({
         method: 'POST',
         body: {
           imageBase64: imageDataUrl,
-          mimeType: 'image/jpeg',
+          mimeType: detectedMime,
           mode: objectMode,
           hint: hintOverride || undefined,
         },
@@ -259,10 +270,12 @@ export const ScannerPage: React.FC<ScannerPageProps> = ({
         });
       }
     } catch (err) {
+      console.error('[PINDAMAI Object Scanner Error]', err);
       setObjectError(
-        err instanceof Error
-          ? err.message
-          : 'Waduh, gagal menganalisis objek. Coba cek koneksi atau ulangi sebentar lagi ya.'
+        formatSafeError(
+          err,
+          'Waduh, gagal menganalisis objek. Coba cek koneksi atau ulangi sebentar lagi ya.'
+        )
       );
     } finally {
       setObjectLoading(false);
