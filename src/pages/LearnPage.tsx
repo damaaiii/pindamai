@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   ArrowRight,
+  RotateCcw,
 } from 'lucide-react';
 import type {
   AppSettings,
@@ -22,6 +23,7 @@ import type {
   VocabularyItem,
 } from '../types/pindamai';
 import { AudioPlayerButton } from '../components/AudioPlayerButton';
+import { apiRequest } from '../lib/apiClient';
 import learn3dImg from '../assets/images/learn_3d_study_1794619234598.jpg';
 
 interface LearnPageProps {
@@ -93,21 +95,16 @@ export const LearnPage: React.FC<LearnPageProps> = ({
     setMiniAnswers({});
 
     try {
-      const res = await fetch('/api/ai/analyze-language', {
+      const typed = await apiRequest<LanguageAnalysisResponse>('/api/ai/analyze-language', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           text: targetText,
           language: targetLang,
           level,
           simplify,
-        }),
+        },
+        timeoutMs: 55000,
       });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Gagal menganalisis teks.');
-      }
-      const typed = data as LanguageAnalysisResponse;
       setAnalysis(typed);
 
       if (!simplify) {
@@ -289,9 +286,20 @@ export const LearnPage: React.FC<LearnPageProps> = ({
         )}
 
         {error && (
-          <div className="p-3.5 rounded-2xl bg-[#FCE9ED] border border-[#F6C9D5] text-xs text-[#7B233B] flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-            <span>{error}</span>
+          <div className="p-3.5 rounded-2xl bg-[#FCE9ED] border border-[#F6C9D5] text-xs text-[#7B233B] flex flex-wrap items-center justify-between gap-2.5">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{error}</span>
+            </div>
+            <button
+              type="button"
+              disabled={loading || !isOnline || !text.trim()}
+              onClick={() => runAnalysis(false)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#F6C9D5] text-xs font-bold text-[#2B2226] min-h-[34px]"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Coba Lagi</span>
+            </button>
           </div>
         )}
       </div>

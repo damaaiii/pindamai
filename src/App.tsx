@@ -20,6 +20,7 @@ import type {
   ScanHistoryItem,
   VocabularyItem,
 } from './types/pindamai';
+import { apiRequest } from './lib/apiClient';
 import {
   DEFAULT_PROGRESS,
   DEFAULT_SETTINGS,
@@ -118,8 +119,7 @@ export default function App() {
 
   useEffect(() => {
     if (!isOnline) return;
-    fetch('/api/health')
-      .then((r) => r.json())
+    apiRequest<{ ok: boolean; aiConfigured?: boolean }>('/api/health', { timeoutMs: 10000 })
       .then((d) => {
         if (typeof d?.aiConfigured === 'boolean') {
           setAiConfigured(d.aiConfigured);

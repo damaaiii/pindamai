@@ -22,6 +22,7 @@ import type {
 } from '../types/pindamai';
 import { playFeedbackTone } from '../lib/speech';
 import { AudioPlayerButton } from '../components/AudioPlayerButton';
+import { apiRequest } from '../lib/apiClient';
 import practice3dImg from '../assets/images/practice_3d_quiz_1794619235141.jpg';
 import words3dImg from '../assets/images/words_3d_collection_1794619235506.jpg';
 
@@ -424,22 +425,18 @@ export const PracticePage: React.FC<PracticePageProps> = ({
     setAnswerHistory([]);
 
     try {
-      const res = await fetch('/api/ai/generate-practice', {
+      const data = await apiRequest<PracticePayload>('/api/ai/generate-practice', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           mode,
           count,
           sourceText: sourceKind === 'scan' ? activeScanText.trim() : undefined,
           vocabularyList: sourceKind === 'vocab' ? vocabPayload : [],
           category: quizCategory,
           targetLanguage: quizLanguage,
-        }),
+        },
+        timeoutMs: 55000,
       });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Gagal menyiapkan latihan.');
-      }
 
       const normalized = validateAndNormalizePractice(data, mode);
       setSession(normalized);

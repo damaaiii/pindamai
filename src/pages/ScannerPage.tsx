@@ -14,6 +14,7 @@ import {
   Loader2,
   ClipboardPaste,
   Headphones,
+  RotateCcw,
 } from 'lucide-react';
 import Tesseract from 'tesseract.js';
 import type {
@@ -30,6 +31,7 @@ import { CameraCapture } from '../components/CameraCapture';
 import { ImageEditor } from '../components/ImageEditor';
 import { AudioPlayerButton } from '../components/AudioPlayerButton';
 import { fileToDataUrl } from '../lib/imageUtils';
+import { apiRequest } from '../lib/apiClient';
 
 interface ScannerPageProps {
   initialMode: 'text' | 'object';
@@ -177,21 +179,16 @@ export const ScannerPage: React.FC<ScannerPageProps> = ({
     setTextAnalyzeError(null);
 
     try {
-      const res = await fetch('/api/ai/analyze-language', {
+      const typed = await apiRequest<LanguageAnalysisResponse>('/api/ai/analyze-language', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           text: cleanText,
           language: ocrLanguage,
           level: settings.defaultExplanationLevel,
           simplify: false,
-        }),
+        },
+        timeoutMs: 55000,
       });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Gagal menganalisis teks.');
-      }
-      const typed = data as LanguageAnalysisResponse;
       setTextAnalysisResult(typed);
 
       await onSaveScanHistory({
@@ -232,21 +229,16 @@ export const ScannerPage: React.FC<ScannerPageProps> = ({
     setObjectError(null);
 
     try {
-      const res = await fetch('/api/ai/scan-objects', {
+      const typed = await apiRequest<ObjectScanResponse>('/api/ai/scan-objects', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           imageBase64: imageDataUrl,
           mimeType: 'image/jpeg',
           mode: objectMode,
           hint: hintOverride || undefined,
-        }),
+        },
+        timeoutMs: 55000,
       });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Gagal menghubungi AI Vision.');
-      }
-      const typed = data as ObjectScanResponse;
       setObjectResult(typed);
       setSelectedObjectIdx(0);
       setShowCorrection(false);
@@ -603,9 +595,20 @@ export const ScannerPage: React.FC<ScannerPageProps> = ({
               />
 
               {textAnalyzeError && (
-                <div className="p-3.5 rounded-2xl bg-[#FCE9ED] border border-[#F6C9D5] text-xs text-[#7B233B] flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span>{textAnalyzeError}</span>
+                <div className="p-3.5 rounded-2xl bg-[#FCE9ED] border border-[#F6C9D5] text-xs text-[#7B233B] flex flex-wrap items-center justify-between gap-2.5">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{textAnalyzeError}</span>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={textAnalyzing || !isOnline}
+                    onClick={handleAnalyzeOCRText}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#F6C9D5] text-xs font-bold text-[#2B2226] min-h-[34px]"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Coba Lagi</span>
+                  </button>
                 </div>
               )}
 
@@ -976,9 +979,20 @@ export const ScannerPage: React.FC<ScannerPageProps> = ({
             )}
 
             {objectError && (
-              <div className="p-3.5 rounded-2xl bg-[#FCE9ED] border border-[#F6C9D5] text-xs text-[#7B233B] flex items-start gap-2.5">
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>{objectError}</span>
+              <div className="p-3.5 rounded-2xl bg-[#FCE9ED] border border-[#F6C9D5] text-xs text-[#7B233B] flex flex-wrap items-center justify-between gap-2.5">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{objectError}</span>
+                </div>
+                <button
+                  type="button"
+                  disabled={objectLoading || !isOnline || !imageDataUrl}
+                  onClick={() => handleScanObjects()}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#F6C9D5] text-xs font-bold text-[#2B2226] min-h-[34px]"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Coba Lagi</span>
+                </button>
               </div>
             )}
 

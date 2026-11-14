@@ -1,3 +1,5 @@
+import { apiRequest } from './apiClient';
+
 export type AudioLang = 'ar-SA' | 'en-US' | 'id-ID';
 export type AudioStatus = 'idle' | 'loading' | 'playing' | 'paused' | 'error';
 
@@ -246,15 +248,14 @@ class PindamaiAudioManager {
           throw new Error('Suara perangkat tidak tersedia saat offline. Hubungkan internet untuk suara AI ya!');
         }
 
-        const res = await fetch('/api/ai/tts', {
+        const data = await apiRequest<{ audioBase64?: string; mimeType?: string }>('/api/ai/tts', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text, lang, slow }),
+          body: { text, lang, slow },
+          timeoutMs: 35000,
         });
 
-        const data = await res.json();
-        if (!res.ok || !data.audioBase64) {
-          throw new Error(data.error || 'Gagal memuat audio pengucapan dari server.');
+        if (!data.audioBase64) {
+          throw new Error('Gagal memuat audio pengucapan dari server.');
         }
 
         const binary = atob(data.audioBase64);
